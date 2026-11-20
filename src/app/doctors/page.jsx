@@ -8,12 +8,11 @@ import AdminLayout from "@/components/layout/AdminLayout";
 import DoctorFormModal from "@/components/doctors/DoctorFormModal";
 import DoctorPatientsModal from "@/components/doctors/DoctorPatientsModal";
 import DoctorTable from "@/components/doctors/DoctorTable";
-
 import DoctorStats from "@/components/doctors/DoctorStats";
 import DoctorFilters from "@/components/doctors/DoctorFilters";
 import DoctorPagination from "@/components/doctors/DoctorPagination";
 
-import { initialDoctors } from "@/data/doctorsData";
+import { useHealthcare } from "@/context/HealthcareContext";
 
 import {
   confirmAction,
@@ -24,8 +23,14 @@ import {
 const PAGE_SIZE = 5;
 
 export default function DoctorsPage() {
-  // Main data
-  const [doctors, setDoctors] = useState(initialDoctors);
+  // Global healthcare state
+  const {
+    doctors = [],
+    addDoctor,
+    addPatient,
+    deletePatient,
+    deleteDoctor,
+  } = useHealthcare();
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -53,7 +58,7 @@ export default function DoctorsPage() {
     [doctors]
   );
 
-  // Search and filter
+  // Search and filter doctors
   const filteredDoctors = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
 
@@ -74,7 +79,7 @@ export default function DoctorsPage() {
 
       const matchesSpecialization =
         specialization === "all" ||
-        doctor.specialization === specialization;
+        doctor.specialization?.trim() === specialization;
 
       const registrationDate = String(
         doctor.createdAt ?? ""
@@ -109,7 +114,6 @@ export default function DoctorsPage() {
 
   const safePage = Math.min(currentPage, totalPages);
 
-  // Keep page valid when filtered results change
   useEffect(() => {
     if (currentPage !== safePage) {
       setCurrentPage(safePage);
@@ -134,7 +138,7 @@ export default function DoctorsPage() {
     filteredDoctors.length
   );
 
-  // Statistics
+  // Dashboard statistics
   const totalPatients = useMemo(
     () =>
       doctors.reduce(
@@ -153,7 +157,7 @@ export default function DoctorsPage() {
     (doctor) => doctor.id === selectedDoctorId
   );
 
-  // Add doctor with SweetAlert confirmation
+  // Add doctor
   const handleAddDoctor = async (formData) => {
     try {
       const confirmation = await confirmAction({
@@ -173,10 +177,8 @@ export default function DoctorsPage() {
         patients: [],
       };
 
-      setDoctors((previous) => [
-        newDoctor,
-        ...previous,
-      ]);
+      // Update global context
+      addDoctor(newDoctor);
 
       setCurrentPage(1);
       setShowAddModal(false);
@@ -195,42 +197,59 @@ export default function DoctorsPage() {
     }
   };
 
-  // Add patient
-  const handleAddPatient = async (doctorId, patient) => {
-    setDoctors((previous) =>
-      previous.map((doctor) =>
-        doctor.id === doctorId
-          ? {
-              ...doctor,
-              patients: [
-                ...(doctor.patients || []),
-                patient,
-              ],
-            }
-          : doctor
-      )
+  // Delete doctor
+  const handleDeleteDoctor = async (doctorId) => {
+    const doctor = doctors.find(
+      (item) => item.id === doctorId
     );
+
+    if (!doctor) return;
+
+    try {
+      const patientCount = doctor.patients?.length || 0;
+
+      const confirmation = await confirmAction({
+        title: "Delete Doctor?",
+        text: patientCount > 0
+          ? `${doctor.name} has ${patientCount} assigned patients. Deleting this doctor will also remove their patient records from the current demo data.`
+          : `Are you sure you want to delete ${doctor.name}?`,
+        icon: "warning",
+        confirmText: "Yes, Delete",
+        cancelText: "Cancel",
+        confirmColor: "#dc2626",
+      });
+
+      if (!confirmation.isConfirmed) return;
+
+      // Update global context
+      deleteDoctor(doctorId);
+
+      if (selectedDoctorId === doctorId) {
+        setSelectedDoctorId(null);
+      }
+
+      await showSuccess(
+        "Doctor Deleted!",
+        `${doctor.name} has been removed from the doctor directory.`
+      );
+    } catch (error) {
+      console.error("Delete doctor error:", error);
+
+      await showError(
+        "Failed to Delete Doctor",
+        "Something went wrong. Please try again."
+      );
+    }
+  };
+
+  // Add patient
+  const handleAddPatient = (doctorId, patient) => {
+    addPatient(doctorId, patient);
   };
 
   // Delete patient
-  const handleDeletePatient = async (
-    doctorId,
-    patientId
-  ) => {
-    setDoctors((previous) =>
-      previous.map((doctor) =>
-        doctor.id === doctorId
-          ? {
-              ...doctor,
-              patients: (
-                doctor.patients || []
-              ).filter(
-                (patient) => patient.id !== patientId
-              ),
-            }
-          : doctor
-      )
-    );
+  const handleDeletePatient = (doctorId, patientId) => {
+    deletePatient(doctorId, patientId);
   };
 
   // Update filters
@@ -313,6 +332,7 @@ export default function DoctorsPage() {
       <DoctorTable
         doctors={paginatedDoctors}
         onViewPatients={setSelectedDoctorId}
+        onDeleteDoctor={handleDeleteDoctor}
       />
 
       {/* Pagination */}

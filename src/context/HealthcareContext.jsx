@@ -3,6 +3,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useMemo,
   useState,
@@ -12,14 +13,30 @@ import { initialDoctors } from "@/data/doctorsData";
 
 const HealthcareContext = createContext(null);
 
-export function HealthcareProvider({ children }) {
-  const [doctors, setDoctors] = useState(initialDoctors);
+// Normalize initial data
+const normalizeDoctors = (data) =>
+  Array.isArray(data)
+    ? data.map((doctor) => ({
+        ...doctor,
+        patients: Array.isArray(doctor.patients)
+          ? doctor.patients
+          : [],
+      }))
+    : [];
 
-  // Flatten all patients for global access
+export function HealthcareProvider({ children }) {
+  const [doctors, setDoctors] = useState(() =>
+    normalizeDoctors(initialDoctors)
+  );
+
+  // ==========================================
+  // DERIVED PATIENT DATA
+  // ==========================================
+
   const patients = useMemo(
     () =>
       doctors.flatMap((doctor) =>
-        (doctor.patients || []).map((patient) => ({
+        doctor.patients.map((patient) => ({
           ...patient,
           doctorId: doctor.id,
           doctorName: doctor.name,
@@ -30,97 +47,221 @@ export function HealthcareProvider({ children }) {
     [doctors]
   );
 
-  // Add doctor
-  const addDoctor = (doctor) => {
-    setDoctors((prev) => [doctor, ...prev]);
-  };
+  // ==========================================
+  // DOCTOR OPERATIONS
+  // ==========================================
 
-  // Add patient
-  const addPatient = (doctorId, patient) => {
-    setDoctors((prev) =>
-      prev.map((doctor) =>
+  // Add doctor
+  const addDoctor = useCallback((doctor) => {
+    if (!doctor?.id) return false;
+
+    setDoctors((previous) => {
+      const exists = previous.some(
+        (item) => item.id === doctor.id
+      );
+
+      if (exists) return previous;
+
+      return [
+        {
+          ...doctor,
+          patients: Array.isArray(doctor.patients)
+            ? doctor.patients
+            : [],
+        },
+        ...previous,
+      ];
+    });
+
+    return true;
+  }, []);
+
+  // Update doctor
+  const updateDoctor = useCallback((doctorId, updates) => {
+    setDoctors((previous) =>
+      previous.map((doctor) =>
+        doctor.id === doctorId
+          ? {
+              ...doctor,
+              ...updates,
+              id: doctor.id,
+              patients: doctor.patients,
+            }
+          : doctor
+      )
+    );
+  }, []);
+
+  // Delete doctor
+  const deleteDoctor = useCallback((doctorId) => {
+    setDoctors((previous) =>
+      previous.filter(
+        (doctor) => doctor.id !== doctorId
+      )
+    );
+  }, []);
+
+  // ==========================================
+  // PATIENT OPERATIONS
+  // ==========================================
+
+  // Add patient to a doctor
+  const addPatient = useCallback((doctorId, patient) => {
+    if (!patient?.id) return;
+
+    setDoctors((previous) => {
+      const doctorExists = previous.some(
+        (doctor) => doctor.id === doctorId
+      );
+
+      const patientExists = previous.some((doctor) =>
+        doctor.patients.some(
+          (item) => item.id === patient.id
+        )
+      );
+
+      if (!doctorExists || patientExists) {
+        return previous;
+      }
+
+      return previous.map((doctor) =>
         doctor.id === doctorId
           ? {
               ...doctor,
               patients: [
-                ...(doctor.patients || []),
+                ...doctor.patients,
                 patient,
               ],
             }
           : doctor
-      )
-    );
-  };
+      );
+    });
+  }, []);
 
-  // Update patient, including doctor assignment
-  const updatePatient = (
-    oldDoctorId,
-    patientId,
-    newDoctorId,
-    updates
-  ) => {
-    setDoctors((prev) =>
-      prev.map((doctor) => {
-        const existing = (doctor.patients || []).find(
+  // Update patient and transfer between doctors
+  const updatePatient = useCallback(
+    (oldDoctorId, patientId, newDoctorId, updates) => {
+      setDoctors((previous) => {
+        const oldDoctor = previous.find(
+          (doctor) => doctor.id === oldDoctorId
+        );
+
+        const newDoctor = previous.find(
+          (doctor) => doctor.id === newDoctorId
+        );
+
+        if (!oldDoctor || !newDoctor) {
+          return previous;
+        }
+
+        const existingPatient = oldDoctor.patients.find(
           (patient) => patient.id === patientId
         );
 
-        const remaining = (doctor.patients || []).filter(
-          (patient) => patient.id !== patientId
-        );
-
-        if (doctor.id === newDoctorId) {
-          return {
-            ...doctor,
-            patients: [
-              ...remaining,
-              {
-                ...existing,
-                ...updates,
-                id: patientId,
-              },
-            ],
-          };
+        if (!existingPatient) {
+          return previous;
         }
 
-        if (doctor.id === oldDoctorId) {
-          return {
-            ...doctor,
-            patients: remaining,
-          };
+        const updatedPatient = {
+          ...existingPatient,
+          ...updates,
+          id: patientId,
+        };
+
+        // Same doctor: update patient details
+        if (oldDoctorId === newDoctorId) {
+          return previous.map((doctor) =>
+            doctor.id === oldDoctorId
+              ? {
+                  ...doctor,
+                  patients: doctor.patients.map(
+                    (patient) =>
+                      patient.id === patientId
+                        ? updatedPatient
+                        : patient
+                  ),
+                }
+              : doctor
+          );
         }
 
-        return doctor;
-      })
-    );
-  };
-
-  // Delete patient
-  const deletePatient = (doctorId, patientId) => {
-    setDoctors((prev) =>
-      prev.map((doctor) =>
-        doctor.id === doctorId
-          ? {
+        // Different doctor: transfer patient
+        return previous.map((doctor) => {
+          if (doctor.id === oldDoctorId) {
+            return {
               ...doctor,
-              patients: (doctor.patients || []).filter(
+              patients: doctor.patients.filter(
                 (patient) => patient.id !== patientId
               ),
-            }
-          : doctor
-      )
-    );
-  };
+            };
+          }
+
+          if (doctor.id === newDoctorId) {
+            return {
+              ...doctor,
+              patients: [
+                ...doctor.patients,
+                updatedPatient,
+              ],
+            };
+          }
+
+          return doctor;
+        });
+      });
+    },
+    []
+  );
+
+  // Delete patient
+  const deletePatient = useCallback(
+    (doctorId, patientId) => {
+      setDoctors((previous) =>
+        previous.map((doctor) =>
+          doctor.id === doctorId
+            ? {
+                ...doctor,
+                patients: doctor.patients.filter(
+                  (patient) => patient.id !== patientId
+                ),
+              }
+            : doctor
+        )
+      );
+    },
+    []
+  );
+
+  // ==========================================
+  // CONTEXT VALUE
+  // ==========================================
 
   const value = useMemo(
     () => ({
+      // Data
       doctors,
       patients,
+
+      // Doctor methods
       addDoctor,
+      updateDoctor,
+      deleteDoctor,
+
+      // Patient methods
       addPatient,
       updatePatient,
       deletePatient,
     }),
-    [doctors, patients]
+    [
+      doctors,
+      patients,
+      addDoctor,
+      updateDoctor,
+      deleteDoctor,
+      addPatient,
+      updatePatient,
+      deletePatient,
+    ]
   );
 
   return (
@@ -130,12 +271,16 @@ export function HealthcareProvider({ children }) {
   );
 }
 
+// ==========================================
+// CUSTOM HOOK
+// ==========================================
+
 export function useHealthcare() {
   const context = useContext(HealthcareContext);
 
   if (!context) {
     throw new Error(
-      "useHealthcare must be used inside HealthcareProvider"
+      "useHealthcare must be used inside HealthcareProvider."
     );
   }
 
