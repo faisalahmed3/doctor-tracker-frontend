@@ -4,7 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "sweetalert2/dist/sweetalert2.min.css";
 
-import { HealthcareProvider } from "@/context/HealthcareContext";
+import AppProviders from "@/components/providers/AppProviders";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,12 +17,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: {
-    default: "Doctor Tracker",
-    template: "%s | Doctor Tracker",
-  },
+  title: "Doctor Tracker | Healthcare Management System",
   description:
-    "A healthcare management system for managing doctors, patients and healthcare activities.",
+    "Secure healthcare management system for doctors and patient records.",
 };
 
 export default function RootLayout({ children }) {
@@ -32,9 +29,9 @@ export default function RootLayout({ children }) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
-        <HealthcareProvider>
+        <AppProviders>
           {children}
-        </HealthcareProvider>
+        </AppProviders>
       </body>
     </html>
   );

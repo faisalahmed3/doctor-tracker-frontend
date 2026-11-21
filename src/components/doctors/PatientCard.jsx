@@ -1,29 +1,47 @@
 
-import {
-  UserRound,
-  Trash2,
-  CalendarDays,
-} from "lucide-react";
+"use client";
+
+import { UserRound, Trash2, CalendarDays } from "lucide-react";
+
+const formatRegisteredDate = (value) => {
+  if (!value) return "—";
+
+  const raw = String(value);
+  const datePart = raw.match(/^\d{4}-\d{2}-\d{2}/);
+
+  const date = datePart
+    ? new Date(`${datePart[0]}T00:00:00Z`)
+    : new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+};
 
 export default function PatientCard({
   patient,
   onDelete,
-  isDeleting,
-  deleteDisabled,
+  isDeleting = false,
+  deleteDisabled = false,
 }) {
-  const registeredDate = patient.registeredAt
-    ? new Date(`${patient.registeredAt}T00:00:00`).toLocaleDateString(
-        "en-GB",
-        {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-        }
-      )
-    : "—";
+  if (!patient) return null;
+
+  const patientName = patient.name || "Unnamed Patient";
+  const patientId = patient.id || "—";
+
+  const registeredDate = formatRegisteredDate(
+    patient.registeredAt ?? patient.createdAt
+  );
+
+  const isDisabled = deleteDisabled || isDeleting;
 
   return (
-    <div className="rounded-xl border border-slate-200 p-4 transition hover:border-slate-300">
+    <div className="rounded-xl border border-slate-200 bg-white p-4 transition-colors duration-200 hover:border-slate-300">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
@@ -31,38 +49,39 @@ export default function PatientCard({
           </div>
 
           <div className="min-w-0">
-            <h4 className="text-sm font-bold text-[#102a43]">
-              {patient.name}
+            <h4 className="break-words text-sm font-bold text-[#102a43]">
+              {patientName}
             </h4>
 
-            <p className="mt-1 text-xs text-slate-400">
-              Patient ID: {patient.id}
+            <p className="mt-1 break-all text-[11px] text-slate-400">
+              <span className="font-medium">Patient ID:</span> {patientId}
             </p>
 
             <div className="mt-2 flex flex-wrap gap-2">
               <span className="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600">
-                Age: {patient.age}
+                Age: {patient.age ?? "—"}
               </span>
 
-              <span className="rounded-md bg-[#e8f5f2] px-2 py-1 text-[10px] font-medium text-[#167d73]">
-                {patient.condition}
+              <span className="max-w-full break-words rounded-md bg-[#e8f5f2] px-2 py-1 text-[10px] font-medium text-[#167d73]">
+                {patient.condition || "Not specified"}
               </span>
             </div>
 
             <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-400">
-              <CalendarDays size={12} />
-              Registered: {registeredDate}
+              <CalendarDays size={12} className="shrink-0" />
+              <span>Registered: {registeredDate}</span>
             </div>
           </div>
         </div>
 
         <button
           type="button"
-          onClick={() => onDelete(patient)}
-          disabled={deleteDisabled}
-          aria-label={`Remove ${patient.name}`}
-          title="Remove Patient"
-          className="btn btn-ghost btn-sm btn-square shrink-0 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+          onClick={() => onDelete?.(patient)}
+          disabled={isDisabled}
+          aria-label={`Remove ${patientName}`}
+          aria-busy={isDeleting}
+          title={isDeleting ? "Removing patient..." : "Remove Patient"}
+          className="btn btn-ghost btn-sm btn-square shrink-0 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {isDeleting ? (
             <span className="loading loading-spinner loading-sm" />

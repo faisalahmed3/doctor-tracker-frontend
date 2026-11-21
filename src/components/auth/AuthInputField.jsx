@@ -8,10 +8,11 @@ export default function AuthInputField({
   autoComplete,
   required = true,
   minLength,
+  disabled = false,
 }) {
   return (
     <div className="form-control">
-      <label className="label pb-1">
+      <label htmlFor={name} className="label pb-1">
         <span className="label-text text-sm font-semibold text-slate-700">
           {label}
         </span>
@@ -26,13 +27,15 @@ export default function AuthInputField({
         )}
 
         <input
+          id={name}
           type={type}
           name={name}
           placeholder={placeholder}
           autoComplete={autoComplete}
           required={required}
           minLength={minLength}
-          className="input input-bordered h-11 w-full rounded-xl border-slate-200 bg-slate-50 pl-11 text-sm text-slate-800 transition focus:border-[#167d73] focus:bg-white focus:outline-none"
+          disabled={disabled}
+          className="input input-bordered h-11 w-full rounded-xl border-slate-200 bg-slate-50 pl-11 text-sm text-slate-800 transition focus:border-[#167d73] focus:bg-white focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
         />
       </div>
     </div>

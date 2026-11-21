@@ -1,22 +1,17 @@
 
-import {
-  Search,
-  Filter,
-  RotateCcw,
-  CalendarDays,
-} from "lucide-react";
+import { Search, Filter, RotateCcw, CalendarDays } from "lucide-react";
 
 const inputClass =
   "input input-bordered h-11 w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-[#167d73] focus:bg-white focus:outline-none";
 
 export default function DoctorFilters({
-  searchTerm,
-  specialization,
-  specializations,
-  fromDate,
-  toDate,
-  resultCount,
-  hasActiveFilters,
+  searchTerm = "",
+  specialization = "all",
+  specializations = [],
+  fromDate = "",
+  toDate = "",
+  resultCount = 0,
+  hasActiveFilters = false,
   onSearchChange,
   onSpecializationChange,
   onFromDateChange,
@@ -27,14 +22,12 @@ export default function DoctorFilters({
     <section className="mb-5 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
       <div className="mb-4 flex items-center gap-2">
         <Filter size={17} className="text-[#167d73]" />
-
         <h3 className="text-sm font-bold text-[#102a43]">
           Search & Filters
         </h3>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {/* Search */}
         <div>
           <label
             htmlFor="doctor-search"
@@ -53,14 +46,13 @@ export default function DoctorFilters({
               id="doctor-search"
               type="search"
               value={searchTerm}
-              onChange={(e) => onSearchChange(e.target.value)}
+              onChange={(event) => onSearchChange?.(event.target.value)}
               placeholder="Name, email, hospital..."
               className={`${inputClass} pl-10`}
             />
           </div>
         </div>
 
-        {/* Specialization */}
         <div>
           <label
             htmlFor="doctor-specialization-filter"
@@ -72,8 +64,8 @@ export default function DoctorFilters({
           <select
             id="doctor-specialization-filter"
             value={specialization}
-            onChange={(e) =>
-              onSpecializationChange(e.target.value)
+            onChange={(event) =>
+              onSpecializationChange?.(event.target.value)
             }
             className="select select-bordered h-11 w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-[#167d73] focus:outline-none"
           >
@@ -87,7 +79,6 @@ export default function DoctorFilters({
           </select>
         </div>
 
-        {/* From Date */}
         <div>
           <label
             htmlFor="doctor-from-date"
@@ -107,15 +98,12 @@ export default function DoctorFilters({
               type="date"
               value={fromDate}
               max={toDate || undefined}
-              onChange={(e) =>
-                onFromDateChange(e.target.value)
-              }
+              onChange={(event) => onFromDateChange?.(event.target.value)}
               className={`${inputClass} pl-10 text-xs text-slate-600`}
             />
           </div>
         </div>
 
-        {/* To Date */}
         <div>
           <label
             htmlFor="doctor-to-date"
@@ -135,16 +123,13 @@ export default function DoctorFilters({
               type="date"
               value={toDate}
               min={fromDate || undefined}
-              onChange={(e) =>
-                onToDateChange(e.target.value)
-              }
+              onChange={(event) => onToDateChange?.(event.target.value)}
               className={`${inputClass} pl-10 text-xs text-slate-600`}
             />
           </div>
         </div>
       </div>
 
-      {/* Filter Footer */}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
         <p className="text-xs text-slate-400">
           Showing{" "}

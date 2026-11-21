@@ -1,95 +1,194 @@
 
 "use client";
 
-import { useEffect } from "react";
-import { z } from "zod";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { X, UserPlus, Users, Stethoscope } from "lucide-react";
-
-import FormField from "@/components/common/FormField";
-
-// Validation
-const patientSchema = z.object({
-  name: z.string().trim().min(2, "Patient name must be at least 2 characters."),
-
-  age: z
-    .string()
-    .trim()
-    .regex(/^(0|[1-9]\d{0,2})$/, "Enter a valid age.")
-    .transform(Number)
-    .refine((value) => value <= 120, "Age cannot exceed 120."),
-
-  condition: z.string().trim().min(2, "Patient condition is required."),
-
-  doctorId: z.string().min(1, "Please assign a doctor."),
-});
+import { useRef, useState } from "react";
+import {
+  X,
+  UserPlus,
+  Users,
+  Stethoscope,
+  AlertCircle,
+} from "lucide-react";
 
 const inputClass =
-  "input input-bordered h-11 w-full rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-800 focus:border-[#167d73] focus:bg-white focus:outline-none";
+  "input input-bordered h-11 w-full rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder:text-slate-400 focus:border-[#167d73] focus:bg-white focus:outline-none disabled:opacity-60";
+
+const selectClass =
+  "select select-bordered h-11 w-full rounded-xl border-slate-200 bg-slate-50 pl-10 text-sm text-slate-700 focus:border-[#167d73] focus:outline-none disabled:opacity-60";
+
+const labelClass = "mb-1.5 block text-xs font-semibold text-slate-700";
+
+const fieldClass = (base, hasError) =>
+  `${base} ${hasError ? "border-red-300 bg-red-50" : ""}`;
+
+const isActiveDoctor = (doctor) =>
+  String(doctor?.status ?? "active").toLowerCase() !== "inactive";
+
+function validatePatient(data, doctors, patient) {
+  const errors = {};
+
+  if (data.name.length < 2 || data.name.length > 80) {
+    errors.name = "Patient name must be between 2 and 80 characters.";
+  }
+
+  if (
+    !data.ageRaw ||
+    !Number.isInteger(data.age) ||
+    data.age < 0 ||
+    data.age > 130
+  ) {
+    errors.age = "Enter a valid age between 0 and 130.";
+  }
+
+  if (data.condition.length < 2 || data.condition.length > 200) {
+    errors.condition =
+      "Condition must be between 2 and 200 characters.";
+  }
+
+  const selectedDoctor = doctors.find(
+    (doctor) => String(doctor.id) === data.doctorId
+  );
+
+  if (!selectedDoctor) {
+    errors.doctorId = "Please select a valid doctor.";
+  } else {
+    const isCurrentDoctor =
+      patient &&
+      String(patient.doctorId) === data.doctorId;
+
+    if (!isActiveDoctor(selectedDoctor) && !isCurrentDoctor) {
+      errors.doctorId =
+        "Cannot assign patients to an inactive doctor.";
+    }
+  }
+
+  return errors;
+}
 
 export default function PatientFormModal({
   patient = null,
   doctors = [],
   onClose,
   onSubmit,
+  isSubmitting: externalSubmitting = false,
 }) {
   const isEditing = Boolean(patient);
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm({
-    resolver: zodResolver(patientSchema),
-    defaultValues: {
-      name: patient?.name || "",
-      age: patient?.age != null ? String(patient.age) : "",
-      condition: patient?.condition || "",
-      doctorId: patient?.doctorId || "",
-    },
-  });
+  const submittingRef = useRef(false);
 
-  // Reset values when switching between patients
-  useEffect(() => {
-    reset({
-      name: patient?.name || "",
-      age: patient?.age != null ? String(patient.age) : "",
-      condition: patient?.condition || "",
-      doctorId: patient?.doctorId || "",
-    });
-  }, [patient, reset]);
+  const [localSubmitting, setLocalSubmitting] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [submitError, setSubmitError] = useState("");
 
-  const handleFormSubmit = async (data) => {
-    await onSubmit(data);
+  const isBusy = localSubmitting || externalSubmitting;
+
+  const isDoctorSelectable = (doctor) => {
+    const isCurrentDoctor =
+      isEditing &&
+      String(doctor.id) === String(patient?.doctorId);
+
+    return isActiveDoctor(doctor) || isCurrentDoctor;
+  };
+
+  const hasSelectableDoctors = doctors.some(isDoctorSelectable);
+
+  const handleFieldChange = (event) => {
+    const fieldName = event.target.name;
+
+    if (fieldName) {
+      setErrors((previous) => {
+        if (!previous[fieldName]) return previous;
+
+        const next = { ...previous };
+        delete next[fieldName];
+
+        return next;
+      });
+    }
+
+    setSubmitError("");
   };
 
   const handleClose = () => {
-    if (!isSubmitting) onClose();
+    if (isBusy || submittingRef.current) return;
+
+    onClose?.();
+  };
+
+  const handleFormSubmit = async (event) => {
+    event.preventDefault();
+
+    if (submittingRef.current || externalSubmitting) return;
+
+    const formData = new FormData(event.currentTarget);
+
+    const name = String(formData.get("name") ?? "").trim();
+    const ageRaw = String(formData.get("age") ?? "").trim();
+    const age = Number(ageRaw);
+    const condition = String(
+      formData.get("condition") ?? ""
+    ).trim();
+    const doctorId = String(
+      formData.get("doctorId") ?? ""
+    ).trim();
+
+    const values = { name, ageRaw, age, condition, doctorId };
+    const validationErrors = validatePatient(
+      values,
+      doctors,
+      patient
+    );
+
+    setErrors(validationErrors);
+    setSubmitError("");
+
+    if (Object.keys(validationErrors).length > 0) return;
+
+    submittingRef.current = true;
+    setLocalSubmitting(true);
+
+    try {
+      const success = await onSubmit?.({
+        name,
+        age,
+        condition,
+        doctorId,
+      });
+
+      if (!success) return;
+    } catch (error) {
+      console.error("Patient submission error:", error);
+
+      setSubmitError(
+        error?.message || "Unable to save patient information."
+      );
+    } finally {
+      submittingRef.current = false;
+      setLocalSubmitting(false);
+    }
   };
 
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-slate-950/50 p-4 backdrop-blur-sm"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) handleClose();
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) handleClose();
       }}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="patient-modal-title"
-        className="my-auto max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        aria-busy={isBusy}
+        className="my-auto flex max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
       >
-        {/* Header */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white p-5 sm:p-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e8f5f2] text-[#167d73]">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 p-5 sm:p-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#e8f5f2] text-[#167d73]">
               {isEditing ? <Users size={22} /> : <UserPlus size={22} />}
             </div>
 
-            <div>
+            <div className="min-w-0">
               <h2
                 id="patient-modal-title"
                 className="text-lg font-bold text-[#102a43]"
@@ -99,7 +198,7 @@ export default function PatientFormModal({
 
               <p className="mt-1 text-xs text-slate-400">
                 {isEditing
-                  ? "Update patient information and doctor assignment."
+                  ? "Update patient details and doctor assignment."
                   : "Enter patient information and assign a doctor."}
               </p>
             </div>
@@ -108,75 +207,135 @@ export default function PatientFormModal({
           <button
             type="button"
             onClick={handleClose}
-            disabled={isSubmitting}
-            className="btn btn-ghost btn-sm btn-square"
+            disabled={isBusy}
             aria-label="Close modal"
+            className="btn btn-ghost btn-sm btn-square"
           >
             <X size={19} />
           </button>
         </div>
 
-        {/* Form */}
         <form
-          onSubmit={handleSubmit(handleFormSubmit)}
+          key={patient?.id || "new-patient"}
+          onSubmit={handleFormSubmit}
+          onChange={handleFieldChange}
           noValidate
-          className="space-y-4 p-5 sm:p-6"
+          className="min-h-0 space-y-4 overflow-y-auto p-5 sm:p-6"
         >
-          {/* Patient Name */}
-          <FormField
-            id="patient-name"
-            label="Patient Name"
-            error={errors.name?.message}
-          >
+          {submitError && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3"
+            >
+              <AlertCircle
+                size={17}
+                className="mt-0.5 shrink-0 text-red-600"
+              />
+
+              <p className="text-xs text-red-700">{submitError}</p>
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="patient-name" className={labelClass}>
+              Patient Name
+            </label>
+
             <input
               id="patient-name"
-              {...register("name")}
-              placeholder="Enter patient name"
+              name="name"
+              type="text"
+              defaultValue={patient?.name ?? ""}
               autoComplete="name"
-              aria-invalid={!!errors.name}
-              className={inputClass}
+              minLength={2}
+              maxLength={80}
+              required
+              disabled={isBusy}
+              placeholder="Enter patient name"
+              aria-invalid={Boolean(errors.name)}
+              aria-describedby={
+                errors.name ? "patient-name-error" : undefined
+              }
+              className={fieldClass(inputClass, errors.name)}
             />
-          </FormField>
 
-          {/* Age */}
-          <FormField
-            id="patient-age"
-            label="Age"
-            error={errors.age?.message}
-          >
+            {errors.name && (
+              <p id="patient-name-error" className="mt-1 text-xs text-red-500">
+                {errors.name}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label htmlFor="patient-age" className={labelClass}>
+              Age
+            </label>
+
             <input
               id="patient-age"
-              {...register("age")}
+              name="age"
               type="number"
+              defaultValue={patient?.age ?? ""}
               min="0"
-              max="120"
+              max="130"
+              step="1"
+              inputMode="numeric"
+              required
+              disabled={isBusy}
               placeholder="Enter patient age"
-              aria-invalid={!!errors.age}
-              className={inputClass}
+              aria-invalid={Boolean(errors.age)}
+              aria-describedby={
+                errors.age ? "patient-age-error" : undefined
+              }
+              className={fieldClass(inputClass, errors.age)}
             />
-          </FormField>
 
-          {/* Condition */}
-          <FormField
-            id="patient-condition"
-            label="Medical Condition"
-            error={errors.condition?.message}
-          >
+            {errors.age && (
+              <p id="patient-age-error" className="mt-1 text-xs text-red-500">
+                {errors.age}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label htmlFor="patient-condition" className={labelClass}>
+              Medical Condition
+            </label>
+
             <input
               id="patient-condition"
-              {...register("condition")}
+              name="condition"
+              type="text"
+              defaultValue={patient?.condition ?? ""}
+              minLength={2}
+              maxLength={200}
+              required
+              disabled={isBusy}
               placeholder="e.g. Hypertension"
-              aria-invalid={!!errors.condition}
-              className={inputClass}
+              aria-invalid={Boolean(errors.condition)}
+              aria-describedby={
+                errors.condition
+                  ? "patient-condition-error"
+                  : undefined
+              }
+              className={fieldClass(inputClass, errors.condition)}
             />
-          </FormField>
 
-          {/* Doctor Assignment */}
-          <FormField
-            id="patient-doctor"
-            label="Assign Doctor"
-            error={errors.doctorId?.message}
-          >
+            {errors.condition && (
+              <p
+                id="patient-condition-error"
+                className="mt-1 text-xs text-red-500"
+              >
+                {errors.condition}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label htmlFor="patient-doctor" className={labelClass}>
+              Assign Doctor
+            </label>
+
             <div className="relative">
               <Stethoscope
                 size={17}
@@ -185,27 +344,61 @@ export default function PatientFormModal({
 
               <select
                 id="patient-doctor"
-                {...register("doctorId")}
-                aria-invalid={!!errors.doctorId}
-                className="select select-bordered h-11 w-full rounded-xl border-slate-200 bg-slate-50 pl-10 text-sm text-slate-700 focus:border-[#167d73] focus:outline-none"
+                name="doctorId"
+                defaultValue={patient?.doctorId ?? ""}
+                required
+                disabled={isBusy || !hasSelectableDoctors}
+                aria-invalid={Boolean(errors.doctorId)}
+                aria-describedby={
+                  errors.doctorId ? "patient-doctor-error" : undefined
+                }
+                className={fieldClass(selectClass, errors.doctorId)}
               >
                 <option value="">Select a doctor</option>
 
                 {doctors.map((doctor) => (
-                  <option key={doctor.id} value={doctor.id}>
-                    {doctor.name} — {doctor.specialization}
+                  <option
+                    key={doctor.id}
+                    value={String(doctor.id)}
+                    disabled={!isDoctorSelectable(doctor)}
+                  >
+                    {doctor.name} — {doctor.specialization || "General"}
+                    {!isActiveDoctor(doctor) ? " (Inactive)" : ""}
                   </option>
                 ))}
               </select>
             </div>
-          </FormField>
 
-          {/* Footer */}
+            {errors.doctorId && (
+              <p
+                id="patient-doctor-error"
+                className="mt-1 text-xs text-red-500"
+              >
+                {errors.doctorId}
+              </p>
+            )}
+          </div>
+
+          {isEditing && (
+            <div className="rounded-lg bg-slate-50 p-3">
+              <p className="text-xs leading-5 text-slate-500">
+                You can update patient information or transfer the
+                patient to another active doctor.
+              </p>
+            </div>
+          )}
+
+          {!hasSelectableDoctors && (
+            <p className="text-xs text-amber-600">
+              No doctors are available for assignment.
+            </p>
+          )}
+
           <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
             <button
               type="button"
               onClick={handleClose}
-              disabled={isSubmitting}
+              disabled={isBusy}
               className="btn h-11 min-h-11 rounded-xl border-slate-200 bg-white px-6 text-sm text-slate-600 hover:bg-slate-50"
             >
               Cancel
@@ -213,17 +406,18 @@ export default function PatientFormModal({
 
             <button
               type="submit"
-              disabled={isSubmitting || doctors.length === 0}
+              disabled={isBusy || !hasSelectableDoctors}
+              aria-busy={isBusy}
               className="btn h-11 min-h-11 rounded-xl border-0 bg-[#167d73] px-6 text-sm font-semibold text-white hover:bg-[#12675f] disabled:opacity-60"
             >
-              {isSubmitting ? (
+              {isBusy ? (
                 <>
                   <span className="loading loading-spinner loading-sm" />
-                  Processing...
+                  Saving...
                 </>
               ) : (
                 <>
-                  <UserPlus size={17} />
+                  {isEditing ? <Users size={17} /> : <UserPlus size={17} />}
                   {isEditing ? "Save Changes" : "Add Patient"}
                 </>
               )}

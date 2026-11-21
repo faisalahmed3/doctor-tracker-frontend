@@ -1,20 +1,22 @@
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { UserPlus, Users } from "lucide-react";
+import {
+  UserPlus,
+  RefreshCw,
+  AlertCircle,
+  LoaderCircle,
+} from "lucide-react";
 
 import AdminLayout from "@/components/layout/AdminLayout";
-
 import PatientFormModal from "@/components/patients/PatientFormModal";
 import PatientTable from "@/components/patients/PatientTable";
 import PatientStats from "@/components/patients/PatientStats";
 import PatientFilters from "@/components/patients/PatientFilters";
-
 import DoctorPagination from "@/components/doctors/DoctorPagination";
-
 import { useHealthcare } from "@/context/HealthcareContext";
-
 import {
   confirmAction,
   showSuccess,
@@ -23,31 +25,86 @@ import {
 
 const PAGE_SIZE = 5;
 
+const isActiveDoctor = (doctor) =>
+  String(doctor?.status ?? "active").toLowerCase() !== "inactive";
+
+const getErrorMessage = (error) => {
+  if (Array.isArray(error?.errors) && error.errors.length) {
+    return error.errors
+      .map((item) => item?.message)
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  return error?.message || "Something went wrong. Please try again.";
+};
+
+const toDateKey = (value) => {
+  if (!value) return "";
+
+  const raw = value instanceof Date
+    ? value.toISOString()
+    : String(value).trim();
+
+  const match = raw.match(/^\d{4}-\d{2}-\d{2}/);
+
+  if (match) return match[0];
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime())
+    ? ""
+    : date.toISOString().slice(0, 10);
+};
+
 export default function PatientsPage() {
-  // Global healthcare data
   const {
     doctors = [],
     patients = [],
     addPatient,
     updatePatient,
     deletePatient,
+    loading,
+    isMutating,
+    error,
+    clearError,
+    refreshDoctors,
   } = useHealthcare();
 
-  // Modal states
   const [showFormModal, setShowFormModal] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingPatientId, setDeletingPatientId] = useState(null);
 
-  // Filter states
   const [searchTerm, setSearchTerm] = useState("");
   const [doctorFilter, setDoctorFilter] = useState("all");
   const [conditionFilter, setConditionFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Available medical conditions
+  const isBusy = isSaving || isMutating || deletingPatientId !== null;
+
+  const activeDoctors = useMemo(
+    () => doctors.filter(isActiveDoctor),
+    [doctors]
+  );
+
+  const formDoctors = useMemo(() => {
+    if (!selectedPatient) return activeDoctors;
+
+    const currentDoctor = doctors.find(
+      (doctor) =>
+        String(doctor.id) === String(selectedPatient.doctorId)
+    );
+
+    if (!currentDoctor || isActiveDoctor(currentDoctor)) {
+      return activeDoctors;
+    }
+
+    return [currentDoctor, ...activeDoctors];
+  }, [doctors, activeDoctors, selectedPatient]);
+
   const conditions = useMemo(
     () =>
       [
@@ -60,18 +117,17 @@ export default function PatientsPage() {
     [patients]
   );
 
-  // Statistics
   const assignedDoctors = useMemo(
     () =>
       new Set(
-        patients.map((patient) => patient.doctorId)
+        patients
+          .map((patient) => patient.doctorId)
+          .filter(Boolean)
+          .map(String)
       ).size,
     [patients]
   );
 
-  const totalConditions = conditions.length;
-
-  // Search and filter
   const filteredPatients = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
 
@@ -93,28 +149,20 @@ export default function PatientsPage() {
 
       const matchesDoctor =
         doctorFilter === "all" ||
-        patient.doctorId === doctorFilter;
+        String(patient.doctorId) === doctorFilter;
 
       const matchesCondition =
         conditionFilter === "all" ||
         patient.condition?.trim() === conditionFilter;
 
-      const registrationDate = String(
-        patient.registeredAt ?? ""
-      ).slice(0, 10);
-
-      const matchesFromDate =
-        !fromDate || registrationDate >= fromDate;
-
-      const matchesToDate =
-        !toDate || registrationDate <= toDate;
+      const registeredAt = toDateKey(patient.registeredAt);
 
       return (
         matchesSearch &&
         matchesDoctor &&
         matchesCondition &&
-        matchesFromDate &&
-        matchesToDate
+        (!fromDate || registeredAt >= fromDate) &&
+        (!toDate || registeredAt <= toDate)
       );
     });
   }, [
@@ -126,7 +174,6 @@ export default function PatientsPage() {
     toDate,
   ]);
 
-  // Pagination
   const totalPages = Math.max(
     1,
     Math.ceil(filteredPatients.length / PAGE_SIZE)
@@ -143,10 +190,7 @@ export default function PatientsPage() {
   const paginatedPatients = useMemo(() => {
     const start = (safePage - 1) * PAGE_SIZE;
 
-    return filteredPatients.slice(
-      start,
-      start + PAGE_SIZE
-    );
+    return filteredPatients.slice(start, start + PAGE_SIZE);
   }, [filteredPatients, safePage]);
 
   const showingStart = filteredPatients.length
@@ -158,7 +202,6 @@ export default function PatientsPage() {
     filteredPatients.length
   );
 
-  // Active filters
   const hasActiveFilters = Boolean(
     searchTerm.trim() ||
     doctorFilter !== "all" ||
@@ -167,137 +210,204 @@ export default function PatientsPage() {
     toDate
   );
 
-  // Open Add Modal
   const handleOpenAdd = () => {
+    if (isBusy || activeDoctors.length === 0) return;
+
     setSelectedPatient(null);
     setShowFormModal(true);
   };
 
-  // Open Edit Modal
   const handleEditPatient = (patient) => {
+    if (isBusy || !patient) return;
+
     setSelectedPatient(patient);
     setShowFormModal(true);
   };
 
-  // Close Modal
   const handleCloseModal = () => {
+    if (isBusy) return;
+
     setShowFormModal(false);
     setSelectedPatient(null);
   };
 
-  // Add or Update Patient
   const handleSavePatient = async (formData) => {
+    if (isBusy) return false;
+
     const isEditing = Boolean(selectedPatient);
 
+    const name = String(formData.name ?? "").trim();
+    const ageRaw = String(formData.age ?? "").trim();
+    const age = Number(ageRaw);
+    const condition = String(formData.condition ?? "").trim();
+    const doctorId = String(formData.doctorId ?? "").trim();
+
+    if (
+      name.length < 2 ||
+      name.length > 80 ||
+      !ageRaw ||
+      !Number.isInteger(age) ||
+      age < 0 ||
+      age > 130 ||
+      condition.length < 2 ||
+      condition.length > 200
+    ) {
+      await showError(
+        "Invalid Patient Information",
+        "Please provide a valid name, age and medical condition."
+      );
+      return false;
+    }
+
+    const selectedDoctor = formDoctors.find(
+      (doctor) => String(doctor.id) === doctorId
+    );
+
+    if (!selectedDoctor) {
+      await showError(
+        "Invalid Doctor",
+        "Please select a valid doctor."
+      );
+      return false;
+    }
+
+    const isCurrentDoctor =
+      isEditing &&
+      String(selectedPatient.doctorId) === doctorId;
+
+    if (!isActiveDoctor(selectedDoctor) && !isCurrentDoctor) {
+      await showError(
+        "Doctor Inactive",
+        "New patient assignments require an active doctor."
+      );
+      return false;
+    }
+
+    const payload = { name, age, condition };
+
+    setIsSaving(true);
+
     try {
+      const confirmation = await confirmAction({
+        title: isEditing ? "Update Patient?" : "Add New Patient?",
+        text: isEditing
+          ? `Are you sure you want to update ${name}'s information?`
+          : `Are you sure you want to register ${name} under ${selectedDoctor.name}?`,
+        icon: "question",
+        confirmText: isEditing ? "Yes, Update" : "Yes, Add Patient",
+        cancelText: "Cancel",
+      });
+
+      if (!confirmation?.isConfirmed) return false;
+
+      clearError?.();
+
       if (isEditing) {
-        // Edit confirmation
-        const confirmation = await confirmAction({
-          title: "Update Patient?",
-          text: `Are you sure you want to update ${formData.name}'s information?`,
-          icon: "question",
-          confirmText: "Yes, Update",
-          cancelText: "Cancel",
-        });
-
-        if (!confirmation.isConfirmed) return;
-
-        updatePatient(
+        const updatedPatient = await updatePatient(
           selectedPatient.doctorId,
           selectedPatient.id,
-          formData.doctorId,
-          {
-            name: formData.name,
-            age: formData.age,
-            condition: formData.condition,
-          }
+          doctorId,
+          payload
         );
 
-        handleCloseModal();
+        if (!updatedPatient?.id) {
+          throw new Error("The server did not return an updated patient.");
+        }
+
+        setShowFormModal(false);
+        setSelectedPatient(null);
 
         await showSuccess(
           "Patient Updated Successfully!",
-          `${formData.name}'s information has been updated.`
+          `${name}'s information has been updated.`
         );
-      } else {
-        // Add confirmation
-        const confirmation = await confirmAction({
-          title: "Add New Patient?",
-          text: `Are you sure you want to register ${formData.name}?`,
-          icon: "question",
-          confirmText: "Yes, Add Patient",
-          cancelText: "Cancel",
-        });
 
-        if (!confirmation.isConfirmed) return;
-
-        const newPatient = {
-          id: `PAT-${Date.now()}`,
-          name: formData.name,
-          age: formData.age,
-          condition: formData.condition,
-          registeredAt: new Date().toISOString().slice(0, 10),
-        };
-
-        addPatient(formData.doctorId, newPatient);
-
-        setCurrentPage(1);
-        handleCloseModal();
-
-        await showSuccess(
-          "Patient Added Successfully!",
-          `${formData.name} has been added to the patient directory.`
-        );
+        return true;
       }
-    } catch (error) {
-      console.error("Patient save error:", error);
+
+      const savedPatient = await addPatient(doctorId, payload);
+
+      if (!savedPatient?.id) {
+        throw new Error("The server did not return a saved patient.");
+      }
+
+      setCurrentPage(1);
+      setShowFormModal(false);
+      setSelectedPatient(null);
+
+      await showSuccess(
+        "Patient Added Successfully!",
+        `${savedPatient.name} has been registered successfully.`
+      );
+
+      return true;
+    } catch (err) {
+      console.error("Patient save error:", err);
 
       await showError(
-        isEditing
-          ? "Failed to Update Patient"
-          : "Failed to Add Patient",
-        "Something went wrong. Please try again."
+        isEditing ? "Failed to Update Patient" : "Failed to Add Patient",
+        getErrorMessage(err)
       );
+
+      return false;
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  // Delete Patient
   const handleDeletePatient = async (patient) => {
+    if (isBusy || !patient?.id || !patient?.doctorId) return false;
+
+    setDeletingPatientId(patient.id);
+
     try {
       const confirmation = await confirmAction({
         title: "Delete Patient?",
-        text: `Are you sure you want to delete ${patient.name}'s record? This action cannot be undone.`,
+        text: `Are you sure you want to permanently delete ${patient.name}'s record? This action cannot be undone.`,
         icon: "warning",
         confirmText: "Yes, Delete",
         cancelText: "Cancel",
         confirmColor: "#dc2626",
       });
 
-      if (!confirmation.isConfirmed) return;
+      if (!confirmation?.isConfirmed) return false;
 
-      deletePatient(patient.doctorId, patient.id);
+      clearError?.();
+
+      const success = await deletePatient(
+        patient.doctorId,
+        patient.id
+      );
+
+      if (!success) {
+        throw new Error("Patient deletion was not confirmed.");
+      }
 
       await showSuccess(
         "Patient Deleted Successfully!",
         `${patient.name}'s record has been removed.`
       );
-    } catch (error) {
-      console.error("Patient deletion error:", error);
+
+      return true;
+    } catch (err) {
+      console.error("Patient deletion error:", err);
 
       await showError(
         "Failed to Delete Patient",
-        "Something went wrong. Please try again."
+        getErrorMessage(err)
       );
+
+      return false;
+    } finally {
+      setDeletingPatientId(null);
     }
   };
 
-  // Filter update helper
   const updateFilter = (setter) => (value) => {
     setter(value);
     setCurrentPage(1);
   };
 
-  // Reset filters
   const handleResetFilters = () => {
     setSearchTerm("");
     setDoctorFilter("all");
@@ -307,12 +417,27 @@ export default function PatientsPage() {
     setCurrentPage(1);
   };
 
+  const handleRefresh = async () => {
+    if (loading || isBusy) return;
+
+    try {
+      clearError?.();
+      await refreshDoctors();
+    } catch (err) {
+      console.error("Patient refresh error:", err);
+
+      await showError(
+        "Unable to Refresh Patients",
+        getErrorMessage(err)
+      );
+    }
+  };
+
   return (
     <AdminLayout
       title="Patients"
       description="Manage patient records and doctor assignments."
     >
-      {/* Page Header */}
       <section className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-[#167d73]">
@@ -328,22 +453,66 @@ export default function PatientsPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={handleOpenAdd}
-          disabled={doctors.length === 0}
-          className="btn h-11 min-h-11 rounded-xl border-0 bg-[#167d73] px-5 text-sm font-semibold text-white shadow-lg shadow-[#167d73]/20 hover:bg-[#12675f] disabled:opacity-50"
-        >
-          <UserPlus size={18} />
-          Add New Patient
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={loading || isBusy}
+            aria-label="Refresh patients"
+            title="Refresh patients"
+            className="btn btn-square h-11 min-h-11 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <RefreshCw
+              size={17}
+              className={loading ? "animate-spin" : ""}
+            />
+          </button>
+
+          <button
+            type="button"
+            onClick={handleOpenAdd}
+            disabled={loading || isBusy || activeDoctors.length === 0}
+            className="btn h-11 min-h-11 rounded-xl border-0 bg-[#167d73] px-5 text-sm font-semibold text-white shadow-lg shadow-[#167d73]/20 hover:bg-[#12675f] disabled:opacity-50"
+          >
+            <UserPlus size={18} />
+            Add New Patient
+          </button>
+        </div>
       </section>
 
-      {/* No Doctors Warning */}
-      {doctors.length === 0 && (
+      {error && (
+        <div
+          role="alert"
+          className="mb-5 flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4"
+        >
+          <div className="flex items-start gap-2">
+            <AlertCircle
+              size={18}
+              className="mt-0.5 shrink-0 text-red-600"
+            />
+
+            <div>
+              <p className="text-sm font-semibold text-red-700">
+                Unable to complete the request
+              </p>
+              <p className="mt-1 text-xs text-red-600">{error}</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={clearError}
+            className="text-xs font-semibold text-red-600 hover:text-red-800"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {!loading && activeDoctors.length === 0 && (
         <div className="mb-5 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-amber-800">
-            You need to register a doctor before adding patients.
+            You need an active doctor before registering new patients.
           </p>
 
           <Link
@@ -355,14 +524,12 @@ export default function PatientsPage() {
         </div>
       )}
 
-      {/* Statistics */}
       <PatientStats
         totalPatients={patients.length}
         assignedDoctors={assignedDoctors}
-        totalConditions={totalConditions}
+        totalConditions={conditions.length}
       />
 
-      {/* Filters */}
       <PatientFilters
         searchTerm={searchTerm}
         doctorFilter={doctorFilter}
@@ -381,31 +548,50 @@ export default function PatientsPage() {
         onReset={handleResetFilters}
       />
 
-      {/* Patient Table */}
-      <PatientTable
-        patients={paginatedPatients}
-        onEdit={handleEditPatient}
-        onDelete={handleDeletePatient}
-      />
+      {loading && doctors.length === 0 ? (
+        <div className="flex min-h-[250px] flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white">
+          <LoaderCircle
+            size={34}
+            className="animate-spin text-[#167d73]"
+          />
 
-      {/* Pagination */}
-      <DoctorPagination
-        currentPage={safePage}
-        totalPages={totalPages}
-        showingStart={showingStart}
-        showingEnd={showingEnd}
-        totalItems={filteredPatients.length}
-        onPageChange={setCurrentPage}
-      />
+          <p className="mt-4 text-sm font-semibold text-slate-600">
+            Loading patients...
+          </p>
 
-      {/* Add / Edit Patient Modal */}
+          <p className="mt-1 text-xs text-slate-400">
+            Retrieving patient records from the database.
+          </p>
+        </div>
+      ) : (
+        <>
+          <PatientTable
+            patients={paginatedPatients}
+            onEdit={handleEditPatient}
+            onDelete={handleDeletePatient}
+            isBusy={isBusy}
+            deletingPatientId={deletingPatientId}
+          />
+
+          <DoctorPagination
+            currentPage={safePage}
+            totalPages={totalPages}
+            showingStart={showingStart}
+            showingEnd={showingEnd}
+            totalItems={filteredPatients.length}
+            onPageChange={setCurrentPage}
+          />
+        </>
+      )}
+
       {showFormModal && (
         <PatientFormModal
           key={selectedPatient?.id || "new-patient"}
           patient={selectedPatient}
-          doctors={doctors}
+          doctors={formDoctors}
           onClose={handleCloseModal}
           onSubmit={handleSavePatient}
+          isSubmitting={isSaving || isMutating}
         />
       )}
     </AdminLayout>

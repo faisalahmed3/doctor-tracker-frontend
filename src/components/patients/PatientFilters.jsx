@@ -12,15 +12,15 @@ const inputClass =
   "input input-bordered h-11 w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-[#167d73] focus:bg-white focus:outline-none";
 
 export default function PatientFilters({
-  searchTerm,
-  doctorFilter,
-  conditionFilter,
-  doctors,
-  conditions,
-  fromDate,
-  toDate,
-  resultCount,
-  hasActiveFilters,
+  searchTerm = "",
+  doctorFilter = "all",
+  conditionFilter = "all",
+  doctors = [],
+  conditions = [],
+  fromDate = "",
+  toDate = "",
+  resultCount = 0,
+  hasActiveFilters = false,
   onSearchChange,
   onDoctorChange,
   onConditionChange,
@@ -39,7 +39,6 @@ export default function PatientFilters({
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {/* Search */}
         <div>
           <label
             htmlFor="patient-search"
@@ -58,14 +57,15 @@ export default function PatientFilters({
               id="patient-search"
               type="search"
               value={searchTerm}
-              onChange={(e) => onSearchChange(e.target.value)}
+              onChange={(event) =>
+                onSearchChange?.(event.target.value)
+              }
               placeholder="Name, patient ID, condition..."
               className={`${inputClass} pl-10`}
             />
           </div>
         </div>
 
-        {/* Doctor */}
         <div>
           <label
             htmlFor="patient-doctor-filter"
@@ -77,20 +77,25 @@ export default function PatientFilters({
           <select
             id="patient-doctor-filter"
             value={doctorFilter}
-            onChange={(e) => onDoctorChange(e.target.value)}
+            onChange={(event) =>
+              onDoctorChange?.(event.target.value)
+            }
             className="select select-bordered h-11 w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-[#167d73] focus:outline-none"
           >
             <option value="all">All Doctors</option>
 
             {doctors.map((doctor) => (
-              <option key={doctor.id} value={doctor.id}>
+              <option key={doctor.id} value={String(doctor.id)}>
                 {doctor.name}
+                {!doctor.status ||
+                String(doctor.status).toLowerCase() !== "inactive"
+                  ? ""
+                  : " (Inactive)"}
               </option>
             ))}
           </select>
         </div>
 
-        {/* Condition */}
         <div>
           <label
             htmlFor="patient-condition-filter"
@@ -102,7 +107,9 @@ export default function PatientFilters({
           <select
             id="patient-condition-filter"
             value={conditionFilter}
-            onChange={(e) => onConditionChange(e.target.value)}
+            onChange={(event) =>
+              onConditionChange?.(event.target.value)
+            }
             className="select select-bordered h-11 w-full rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-[#167d73] focus:outline-none"
           >
             <option value="all">All Conditions</option>
@@ -115,7 +122,6 @@ export default function PatientFilters({
           </select>
         </div>
 
-        {/* From Date */}
         <div>
           <label
             htmlFor="patient-from-date"
@@ -135,13 +141,14 @@ export default function PatientFilters({
               type="date"
               value={fromDate}
               max={toDate || undefined}
-              onChange={(e) => onFromDateChange(e.target.value)}
+              onChange={(event) =>
+                onFromDateChange?.(event.target.value)
+              }
               className={`${inputClass} pl-10 text-xs`}
             />
           </div>
         </div>
 
-        {/* To Date */}
         <div>
           <label
             htmlFor="patient-to-date"
@@ -161,14 +168,15 @@ export default function PatientFilters({
               type="date"
               value={toDate}
               min={fromDate || undefined}
-              onChange={(e) => onToDateChange(e.target.value)}
+              onChange={(event) =>
+                onToDateChange?.(event.target.value)
+              }
               className={`${inputClass} pl-10 text-xs`}
             />
           </div>
         </div>
       </div>
 
-      {/* Footer */}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
         <p className="text-xs text-slate-400">
           Showing{" "}

@@ -1,10 +1,7 @@
 
 "use client";
 
-import {
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function DoctorPagination({
   currentPage,
@@ -16,6 +13,9 @@ export default function DoctorPagination({
 }) {
   if (!totalItems) return null;
 
+  const canGoPrevious = currentPage > 1;
+  const canGoNext = currentPage < totalPages;
+
   return (
     <div className="mt-5 flex flex-col justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center">
       <p className="text-xs text-slate-500">
@@ -24,17 +24,15 @@ export default function DoctorPagination({
           {showingStart}–{showingEnd}
         </span>{" "}
         of{" "}
-        <span className="font-semibold text-slate-700">
-          {totalItems}
-        </span>{" "}
+        <span className="font-semibold text-slate-700">{totalItems}</span>{" "}
         doctors
       </p>
 
       <div className="flex items-center justify-between gap-2 sm:justify-end">
         <button
           type="button"
-          disabled={currentPage <= 1}
-          onClick={() => onPageChange(currentPage - 1)}
+          disabled={!canGoPrevious}
+          onClick={() => onPageChange?.(currentPage - 1)}
           className="btn btn-sm rounded-lg border-slate-200 bg-white text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40"
         >
           <ChevronLeft size={15} />
@@ -47,8 +45,8 @@ export default function DoctorPagination({
 
         <button
           type="button"
-          disabled={currentPage >= totalPages}
-          onClick={() => onPageChange(currentPage + 1)}
+          disabled={!canGoNext}
+          onClick={() => onPageChange?.(currentPage + 1)}
           className="btn btn-sm rounded-lg border-slate-200 bg-white text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40"
         >
           Next
