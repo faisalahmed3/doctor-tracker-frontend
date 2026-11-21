@@ -201,7 +201,7 @@ Create a `.env.local` file in the project root.
 Example configuration:
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1
+NEXT_API_URL=http://localhost:5000/api/v1
 ```
 
 Make sure the variable name matches the one referenced in your API configuration files.
