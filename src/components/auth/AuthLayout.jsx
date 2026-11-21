@@ -1,4 +1,8 @@
 
+"use client";
+
+import { useEffect, useState } from "react";
+
 import {
   Activity,
   HeartPulse,
@@ -14,13 +18,22 @@ const workspaceItems = [
 ];
 
 export default function AuthLayout({ children }) {
+  const [currentYear, setCurrentYear] = useState("");
+
+  useEffect(() => {
+    setCurrentYear(String(new Date().getFullYear()));
+  }, []);
+
   return (
     <main
       data-theme="light"
       className="min-h-screen bg-[#f4f7fb] lg:h-screen lg:overflow-hidden"
     >
       <div className="grid min-h-screen lg:h-full lg:min-h-0 lg:grid-cols-2">
+
+        {/* Left Panel */}
         <section className="relative hidden overflow-hidden bg-[#102a43] px-10 py-7 text-white lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:justify-between xl:px-16">
+
           <div
             aria-hidden="true"
             className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full border border-white/10"
@@ -36,6 +49,7 @@ export default function AuthLayout({ children }) {
             className="pointer-events-none absolute -bottom-40 -left-32 h-96 w-96 rounded-full bg-[#167d73]/20 blur-3xl"
           />
 
+          {/* Branding */}
           <div className="relative z-10 flex shrink-0 items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#167d73] shadow-lg">
               <Stethoscope size={24} />
@@ -52,7 +66,9 @@ export default function AuthLayout({ children }) {
             </div>
           </div>
 
+          {/* Main Content */}
           <div className="relative z-10 my-6 w-full max-w-xl">
+
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-[11px] font-medium text-teal-200">
               <Activity size={14} />
               SMART HEALTHCARE MANAGEMENT
@@ -71,7 +87,9 @@ export default function AuthLayout({ children }) {
               activities from one simple and secure administrative workspace.
             </p>
 
+            {/* Feature Cards */}
             <div className="mt-6 grid grid-cols-2 gap-3">
+
               <div className="rounded-xl border border-white/10 bg-white/[0.07] p-4 backdrop-blur-sm">
                 <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-[#167d73]/30 text-[#65d6c2]">
                   <Users size={19} />
@@ -99,9 +117,12 @@ export default function AuthLayout({ children }) {
                   Keep patient information organized and accessible.
                 </p>
               </div>
+
             </div>
 
+            {/* Workspace Overview */}
             <div className="mt-5 rounded-xl border border-white/15 bg-white/10 p-4 backdrop-blur-md">
+
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[10px] text-blue-100/60">
@@ -129,22 +150,33 @@ export default function AuthLayout({ children }) {
                   </div>
                 ))}
               </div>
+
             </div>
           </div>
 
+          {/* Left Footer */}
           <div className="relative z-10 flex shrink-0 items-center justify-between border-t border-white/10 pt-4 text-[11px] text-blue-100/50">
-            <p>© {new Date().getFullYear()} Doctor Tracker</p>
+
+            <p>
+              © {currentYear} Doctor Tracker
+            </p>
 
             <div className="flex items-center gap-2">
               <ShieldCheck size={14} />
               Secure Admin Workspace
             </div>
+
           </div>
         </section>
 
+        {/* Right Panel */}
         <section className="relative flex min-h-screen flex-col justify-center px-5 py-7 sm:px-10 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:px-10 lg:py-6">
+
           <div className="my-auto w-full max-w-md self-center py-2">
+
+            {/* Mobile Branding */}
             <div className="mb-7 flex items-center gap-3 lg:hidden">
+
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#167d73] text-white shadow-sm">
                 <Stethoscope size={22} />
               </div>
@@ -158,15 +190,20 @@ export default function AuthLayout({ children }) {
                   Healthcare Management System
                 </p>
               </div>
+
             </div>
 
+            {/* Authentication Form */}
             {children}
 
+            {/* Right Footer */}
             <p className="mt-5 text-center text-[11px] text-slate-400">
-              © {new Date().getFullYear()} Doctor Tracker. All rights reserved.
+              © {currentYear} Doctor Tracker. All rights reserved.
             </p>
+
           </div>
         </section>
+
       </div>
     </main>
   );
