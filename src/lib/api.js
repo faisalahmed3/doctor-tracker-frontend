@@ -1,108 +1,55 @@
 
-const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://doctor-tracker-backend-teal.vercel.app/api/v1"
-).replace(/\/+$/, "");
-
-// ==========================================
-// CUSTOM API ERROR
-// ==========================================
+import axios from "axios";
+import api from "@/lib/axios";
 
 export class ApiError extends Error {
-  constructor(message, status, errors = null) {
+  constructor(message, status = 0, errors = null) {
     super(message);
 
     this.name = "ApiError";
     this.status = status;
     this.errors = errors;
+
+    this.response = {
+      status,
+      data: { message, errors },
+    };
   }
 }
 
-// ==========================================
-// REUSABLE API REQUEST
-// ==========================================
-
-export const apiRequest = async (
-  endpoint,
-  options = {}
-) => {
+export const apiRequest = async (endpoint, options = {}) => {
   const {
     method = "GET",
     body,
     headers = {},
-    ...fetchOptions
+    ...config
   } = options;
 
-  const isFormData =
-    typeof FormData !== "undefined" &&
-    body instanceof FormData;
-
-  const url = `${API_BASE_URL}${
-    endpoint.startsWith("/") ? endpoint : `/${endpoint}`
-  }`;
-
-  let response;
-
   try {
-    response = await fetch(url, {
-      ...fetchOptions,
-
+    const response = await api.request({
+      ...config,
+      url: endpoint.startsWith("/") ? endpoint : `/${endpoint}`,
       method,
-
-      // Send HTTP-only authentication cookies.
-      credentials: "include",
-
-      // Always retrieve fresh database information.
-      cache: "no-store",
-
-      headers: {
-        Accept: "application/json",
-
-        ...(body !== undefined && !isFormData
-          ? { "Content-Type": "application/json" }
-          : {}),
-
-        ...headers,
-      },
-
-      ...(body !== undefined
-        ? {
-            body: isFormData
-              ? body
-              : JSON.stringify(body),
-          }
-        : {}),
+      data: body,
+      headers,
     });
+
+    return response.data;
   } catch (error) {
+    if (!axios.isAxiosError(error)) {
+      throw error;
+    }
+
+    const status = error.response?.status || 0;
+    const data = error.response?.data;
+
     throw new ApiError(
-      "Unable to connect to the server. Please check your internet or backend server.",
-      0
+      data?.message ||
+        (status === 0
+          ? "Unable to connect to the server."
+          : error.message || "Request failed."),
+      status,
+      data?.errors || null
     );
   }
-
-  // ==========================================
-  // PARSE RESPONSE
-  // ==========================================
-
-  let result = null;
-
-  try {
-    result = await response.json();
-  } catch {
-    result = null;
-  }
-
-  // ==========================================
-  // HANDLE API ERRORS
-  // ==========================================
-
-  if (!response.ok) {
-    throw new ApiError(
-      result?.message || "Something went wrong.",
-      response.status,
-      result?.errors || null
-    );
-  }
-
-  return result;
 };

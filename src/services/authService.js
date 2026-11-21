@@ -1,26 +1,32 @@
 
 import api from "@/lib/axios";
 
-// Admin Login
-export const loginUser = async (credentials) => {
-  const response = await api.post(
-    "/auth/login",
-    credentials
-  );
+const extractUser = (response) => {
+  const user = response?.data?.data?.user;
 
-  return response.data.data.user;
+  if (!user) {
+    throw new Error(
+      response?.data?.message || "Invalid authentication response."
+    );
+  }
+
+  return user;
 };
 
-// Admin Logout
+export const loginUser = async (credentials) => {
+  const response = await api.post("/auth/login", credentials);
+
+  return extractUser(response);
+};
+
 export const logoutUser = async () => {
   const response = await api.post("/auth/logout");
 
   return response.data;
 };
 
-// Get Current Logged-in User
 export const getCurrentUser = async () => {
   const response = await api.get("/auth/me");
 
-  return response.data.data.user;
+  return extractUser(response);
 };

@@ -1,20 +1,22 @@
 
-
 import axios from "axios";
 
+const fallbackURL =
+  process.env.NODE_ENV === "production"
+    ? "https://doctor-tracker-backend-dusky.vercel.app/api/v1"
+    : "http://localhost:5000/api/v1";
+
 const api = axios.create({
-  baseURL:
-    process.env.NEXT_PUBLIC_API_URL ||
-    "https://doctor-tracker-backend-teal.vercel.app/api/v1",
+  baseURL: (
+    process.env.NEXT_PUBLIC_API_URL || fallbackURL
+  ).replace(/\/+$/, ""),
 
   withCredentials: true,
+  timeout: 20000,
 
   headers: {
-    "Content-Type": "application/json",
     Accept: "application/json",
   },
-
-  timeout: 15000,
 });
 
 export default api;
