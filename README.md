@@ -201,7 +201,7 @@ Create a `.env.local` file in the project root.
 Example configuration:
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1
+NEXT_PUBLIC_API_URL=https://doctor-tracker-backend-teal.vercel.app/api/v1
 ```
 
 Make sure the variable name matches the one referenced in your API configuration files.
@@ -321,7 +321,7 @@ Default development configuration:
 |---|---|
 | Frontend | http://localhost:3000 |
 | Backend | http://localhost:5000 |
-| API Base URL | http://localhost:5000/api/v1 |
+| API Base URL | https://doctor-tracker-backend-teal.vercel.app/api/v1 |
 | Database | MongoDB Atlas |
 
 The backend handles database operations, administrator authentication, doctor records, and patient records.
