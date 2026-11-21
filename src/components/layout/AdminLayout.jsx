@@ -1,12 +1,9 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-
-import ProtectedRoute from "@/components/auth/ProtectedRoute";
-import { useAuth } from "@/context/AuthContext";
 
 import {
   LayoutDashboard,
@@ -18,6 +15,9 @@ import {
   LogOut,
   ChevronRight,
 } from "lucide-react";
+
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import { useAuth } from "@/context/AuthContext";
 
 import {
   confirmAction,
@@ -101,6 +101,11 @@ export default function AdminLayout({
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [currentYear, setCurrentYear] = useState(null);
+
+  useEffect(() => {
+    setCurrentYear(new Date().getFullYear());
+  }, []);
 
   const adminName = user?.name?.trim() || "Administrator";
   const adminEmail = user?.email || "Admin Workspace";
@@ -329,7 +334,7 @@ export default function AdminLayout({
           </main>
 
           <footer className="border-t border-slate-200 bg-white px-6 py-4 text-center text-[11px] text-slate-400">
-            © {new Date().getFullYear()} Doctor Tracker. All rights reserved.
+            © {currentYear ? `${currentYear} ` : ""}Doctor Tracker. All rights reserved.
           </footer>
         </div>
       </div>
